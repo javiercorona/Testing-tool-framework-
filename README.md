@@ -182,8 +182,8 @@ Packages (see requirements.txt):
 
 ## Maintainers
 
-- Your Name – Lead Architect
-- Your Organization – Quantum Systems Team
+- jc – Lead Architect
+- Organization – Quantum Systems Team
 
 For enterprise licensing/support: contact quantum@yourdomain.com
 
