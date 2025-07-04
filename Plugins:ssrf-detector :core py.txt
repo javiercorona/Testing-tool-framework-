@@ -1,0 +1,45 @@
+import requests
+from urllib.parse import urlparse
+from ..models import Vulnerability
+
+class SSRFDetectorPlugin(QuantumPluginBase):
+    TEST_URLS = [
+        "http://169.254.169.254/latest/meta-data/",
+        "http://localhost/admin",
+        "http://internal.service"
+    ]
+
+    async def execute(self, payload: Dict) -> Dict:
+        target = payload['target']
+        findings = []
+        
+        for test_url in self.TEST_URLS:
+            try:
+                response = requests.post(
+                    target,
+                    data={'url': test_url},
+                    timeout=5
+                )
+                
+                if self._is_ssrf_response(response, test_url):
+                    findings.append(Vulnerability(
+                        type="SSRF",
+                        severity="High",
+                        payload=test_url,
+                        context=f"Response contained {test_url} data"
+                    ))
+            except Exception as e:
+                continue
+                
+        return {
+            "findings": findings,
+            "signature": self.signer.sign(findings)
+        }
+
+    def _is_ssrf_response(self, response, test_url):
+        indicators = [
+            test_url.split('/')[2] in response.text,  # Check for domain
+            "EC2" in response.text,  # AWS metadata
+            "localhost" in response.headers.values()
+        ]
+        return any(indicators)

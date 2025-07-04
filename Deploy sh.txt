@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# Initialize quantum keys
+mkdir -p /etc/quantum/keys
+python -c "from oqs import KeyEncapsulation; k = KeyEncapsulation('Kyber1024'); open('/etc/quantum/keys/quantum.key', 'wb').write(k.generate_keypair())"
+
+# Start services
+uvicorn orchestrator.main:app --host 0.0.0.0 --port 8000 &
+python -m orchestrator.plugins.threat_intel.updater &
+wait

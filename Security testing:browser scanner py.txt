@@ -1,0 +1,61 @@
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from ..models import TestResult, Vulnerability
+
+class QuantumBrowserScanner:
+    def __init__(self, config, crypto, executor):
+        self.config = config
+        self.crypto = crypto
+        self.executor = executor
+        self.driver = None
+
+    async def run(self, url, screenshots=False, stealth=True):
+        options = self._get_browser_options(stealth)
+        self.driver = uc.Chrome(options=options)
+        
+        try:
+            await self._load_page(url)
+            findings = await self._run_checks()
+            
+            artifacts = {}
+            if screenshots:
+                artifacts['screenshot'] = await self._take_screenshot()
+            
+            return TestResult(
+                status="completed",
+                findings=findings,
+                artifacts=artifacts,
+                execution_time=self._get_execution_time()
+            )
+        finally:
+            self.driver.quit()
+
+    def _get_browser_options(self, stealth):
+        options = uc.ChromeOptions()
+        if self.config.headless:
+            options.add_argument("--headless=new")
+        if stealth:
+            options.add_argument("--disable-blink-features=AutomationControlled")
+        return options
+
+    async def _load_page(self, url):
+        self.driver.get(url)
+        WebDriverWait(self.driver, self.config.timeout).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
+
+    async def _run_checks(self):
+        checks = [
+            self._check_xss_vulnerabilities,
+            self._check_clickjacking,
+            self._check_exposed_endpoints
+        ]
+        return await asyncio.gather(*[check() for check in checks])
+
+    async def _take_screenshot(self):
+        filename = f"screenshot_{datetime.now().timestamp()}.png"
+        path = Path("/tmp") / filename
+        self.driver.save_screenshot(str(path))
+        return str(path)

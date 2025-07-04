@@ -1,0 +1,48 @@
+from enum import Enum
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from datetime import datetime
+from pathlib import Path
+
+class TestType(Enum):
+    BROWSER = "browser"
+    NETWORK = "network"
+    API = "api"
+    XSS = "xss"
+    HEADER = "header"
+    LOAD = "load"
+
+class SecurityLevel(Enum):
+    BASIC = "basic"
+    STANDARD = "standard"
+    HIGH = "high"
+    QUANTUM = "quantum"
+
+@dataclass
+class TestConfig:
+    test_type: TestType
+    target: str
+    security_level: SecurityLevel = SecurityLevel.QUANTUM
+    timeout: int = 10
+    headless: bool = True
+    stealth_mode: bool = True
+    payloads: Optional[List[str]] = None
+    screenshots: bool = False
+    crawl_depth: int = 2
+
+@dataclass
+class TestResult:
+    status: str
+    findings: List[Dict]
+    artifacts: Dict[str, str]
+    execution_time: float
+    timestamp: str = datetime.now().isoformat()
+
+@dataclass
+class Vulnerability:
+    type: str
+    severity: str
+    payload: str
+    context: str
+    proof: Optional[str] = None
+    cve: Optional[str] = None

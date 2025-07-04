@@ -1,0 +1,34 @@
+@app.post("/scan/{scan_type}")
+async def run_security_scan(
+    scan_type: str,
+    config: Dict,
+    auth: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Unified scanning endpoint"""
+    valid_scans = {
+        'xss': 'xss_fuzzer',
+        'network': 'security_testing',
+        'malware': 'ai_malware'
+        # ... other mappings ...
+    }
+    
+    if scan_type not in valid_scans:
+        raise HTTPException(400, "Invalid scan type")
+    
+    return await orchestrator.execute_plugin(
+        valid_scans[scan_type],
+        config
+    )
+
+@app.get("/reports/{scan_id}/verify")
+async def verify_report(
+    scan_id: str,
+    auth: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Blockchain-verified report validation"""
+    record = await orchestrator.verify_artifact(scan_id)
+    return {
+        "valid": record['valid'],
+        "timestamp": record['timestamp'],
+        "block": record['block_number']
+    }

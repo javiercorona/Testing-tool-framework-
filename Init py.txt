@@ -1,0 +1,18 @@
+from importlib import import_module
+from typing import Dict, Type
+from ..main import QuantumPluginBase
+
+PLUGIN_MAP = {
+    "security_testing": "security_testing.core.SecurityTestingPlugin",
+    "xss_fuzzer": "xss_fuzzer.core.XSSFuzzerPlugin",
+    # ... other plugins ...
+}
+
+def load_plugin(plugin_name: str, orchestrator) -> QuantumPluginBase:
+    """Dynamically load any plugin"""
+    if plugin_name not in PLUGIN_MAP:
+        raise ValueError(f"Unknown plugin: {plugin_name}")
+    
+    module_path, class_name = PLUGIN_MAP[plugin_name].rsplit('.', 1)
+    module = import_module(f"orchestrator.plugins.{module_path}")
+    return getattr(module, class_name)(orchestrator)

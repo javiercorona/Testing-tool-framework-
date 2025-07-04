@@ -1,0 +1,51 @@
+import random
+import string
+from ..models import Vulnerability
+
+class APIFuzzerPlugin(QuantumPluginBase):
+    async def execute(self, payload: Dict) -> Dict:
+        base_url = payload['base_url']
+        endpoints = payload.get('endpoints', [])
+        findings = []
+        
+        for endpoint in endpoints:
+            vulns = await self._fuzz_endpoint(f"{base_url}{endpoint['path']}", endpoint['methods'])
+            findings.extend(vulns)
+            
+        return {
+            "findings": findings,
+            "signature": self.signer.sign(findings)
+        }
+
+    async def _fuzz_endpoint(self, url, methods):
+        tests = [
+            self._test_sql_injection,
+            self._test_idor,
+            self._test_mass_assignment
+        ]
+        
+        results = []
+        for method in methods:
+            for test in tests:
+                if vuln := await test(url, method):
+                    results.append(vuln)
+                    
+        return results
+
+    async def _test_sql_injection(self, url, method):
+        payloads = ["' OR 1=1--", "' UNION SELECT null,version()--"]
+        for payload in payloads:
+            response = requests.request(
+                method,
+                url,
+                params={'id': payload} if method == 'GET' else {'data': payload}
+            )
+            if "error in your SQL syntax" in response.text:
+                return Vulnerability(
+                    type="SQLi",
+                    severity="Critical",
+                    payload=payload,
+                    context=f"{method} {url}"
+                )
+
+    # ... other test methods ...

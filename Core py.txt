@@ -1,0 +1,81 @@
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Optional
+from ..models import TestConfig, TestResult
+from ...quantum_crypto import QuantumSigner
+
+class SecurityTestingPlugin(QuantumPluginBase):
+    """Core security scanner with modular test capabilities"""
+    
+    def __init__(self, orchestrator):
+        super().__init__(orchestrator)
+        self.executor = ThreadPoolExecutor(max_workers=5)
+        self.active_scans = {}
+        
+    async def execute(self, payload: Dict) -> Dict:
+        config = TestConfig(**payload)
+        scan_id = self._generate_scan_id()
+        
+        try:
+            # Quantum-secured execution context
+            async with self.orchestrator.quantum_context(scan_id):
+                results = await self._run_tests(config)
+                
+                # Generate verifiable report
+                signed_report = {
+                    "metadata": self._generate_metadata(config),
+                    "results": results,
+                    "signature": self.signer.sign(results),
+                    "artifacts": await self._generate_artifacts(results)
+                }
+                
+                # Store in orchestrator's blockchain
+                await self.orchestrator.store_verifiable(scan_id, signed_report)
+                
+                return signed_report
+                
+        except Exception as e:
+            self.logger.error(f"Scan failed: {str(e)}", scan_id=scan_id)
+            return {
+                "status": "error",
+                "scan_id": scan_id,
+                "error": str(e)
+            }
+
+    async def _run_tests(self, config: TestConfig) -> Dict:
+        """Execute tests based on configuration"""
+        tests = {
+            'browser': self._run_browser_scan,
+            'network': self._run_network_scan,
+            'api': self._run_api_scan,
+            'xss': self._run_xss_scan
+        }
+        
+        # Run tests in parallel
+        tasks = []
+        for test_type, test_func in tests.items():
+            if getattr(config, f"run_{test_type}", False):
+                tasks.append(asyncio.create_task(test_func(config)))
+        
+        return await self._aggregate_results(await asyncio.gather(*tasks))
+
+    async def _run_browser_scan(self, config: TestConfig) -> TestResult:
+        """Execute browser-based tests"""
+        from .browser_scanner import QuantumBrowserScanner
+        
+        scanner = QuantumBrowserScanner(
+            config=config,
+            crypto=self.crypto,
+            executor=self.executor
+        )
+        
+        return await scanner.run(
+            url=config.target,
+            screenshots=config.screenshots,
+            stealth=config.stealth_mode
+        )
+
+    # ... other test methods ...
+
+    def cleanup(self):
+        self.executor.shutdown()

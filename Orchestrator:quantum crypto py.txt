@@ -1,0 +1,37 @@
+from oqs import KeyEncapsulation, Signature
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+import base64
+import os
+
+class QuantumSigner:
+    def __init__(self, security_level="quantum"):
+        self.sig_alg = "Dilithium5" if security_level == "quantum" else "Dilithium3"
+        self.signer = Signature(self.sig_alg)
+        self.public_key = self.signer.generate_keypair()
+
+    def sign(self, data):
+        if not isinstance(data, bytes):
+            data = str(data).encode('utf-8')
+        return base64.b64encode(self.signer.sign(data))
+
+    def verify(self, data, signature):
+        try:
+            sig_bytes = base64.b64decode(signature)
+            return self.signer.verify(data.encode('utf-8'), sig_bytes)
+        except:
+            return False
+
+class QuantumKeyExchange:
+    def __init__(self):
+        self.kem = KeyEncapsulation("Kyber1024")
+        self.public_key = self.kem.generate_keypair()
+
+    def derive_key(self, peer_public_key):
+        ciphertext, shared_secret = self.kem.encap_secret(peer_public_key)
+        return HKDF(
+            algorithm=hashes.SHA3_512(),
+            length=32,
+            salt=None,
+            info=b'quantum-key-derivation',
+        ).derive(shared_secret)

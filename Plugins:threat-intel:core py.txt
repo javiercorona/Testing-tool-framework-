@@ -1,0 +1,51 @@
+import requests
+from datetime import datetime, timedelta
+
+class ThreatIntelPlugin(QuantumPluginBase):
+    CVE_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+    
+    async def execute(self, payload: Dict) -> Dict:
+        results = {}
+        
+        # Get recent CVEs
+        if payload.get('check_cves', False):
+            results['cves'] = await self._get_recent_cves(
+                days=payload.get('cve_lookback_days', 7)
+            )
+        
+        # Check threat feeds
+        if payload.get('check_feeds', False):
+            results['threats'] = await self._check_threat_feeds(
+                payload['target_domain']
+            )
+            
+        return {
+            "intel": results,
+            "signature": self.signer.sign(results)
+        }
+
+    async def _get_recent_cves(self, days=7):
+        start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+        params = {
+            'pubStartDate': start_date,
+            'resultsPerPage': 50
+        }
+        response = requests.get(self.CVE_API_URL, params=params)
+        return response.json().get('vulnerabilities', [])
+
+    async def _check_threat_feeds(self, domain):
+        feeds = [
+            "https://urlhaus.abuse.ch/downloads/text/",
+            "https://phishing.army/download/phishing_links.txt"
+        ]
+        threats = []
+        
+        for feed in feeds:
+            response = requests.get(feed)
+            if domain in response.text:
+                threats.append({
+                    "source": feed,
+                    "status": "listed"
+                })
+                
+        return threats

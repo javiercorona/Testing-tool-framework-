@@ -1,0 +1,44 @@
+from web3 import Web3
+from datetime import datetime
+
+class LogVerifierPlugin(QuantumPluginBase):
+    def __init__(self, orchestrator):
+        super().__init__(orchestrator)
+        self.w3 = Web3(Web3.HTTPProvider(settings.blockchain_node))
+        self.contract = self.w3.eth.contract(
+            address=settings.contract_address,
+            abi=settings.contract_abi
+        )
+
+    async def execute(self, payload: Dict) -> Dict:
+        log_hash = Web3.keccak(text=payload['log_data']).hex()
+        verified = self._verify_on_chain(log_hash)
+        
+        return {
+            "verified": verified,
+            "tx_hash": None if not verified else self._store_hash(log_hash),
+            "signature": self.signer.sign(log_hash)
+        }
+
+    def _verify_on_chain(self, log_hash):
+        return self.contract.functions.verifyLog(
+            log_hash
+        ).call()
+
+    def _store_hash(self, log_hash):
+        tx = self.contract.functions.storeHash(
+            log_hash,
+            int(datetime.now().timestamp())
+        ).build_transaction({
+            'from': settings.blockchain_address,
+            'nonce': self.w3.eth.get_transaction_count(settings.blockchain_address)
+        })
+        
+        signed = self.w3.eth.account.sign_transaction(
+            tx,
+            settings.blockchain_privkey
+        )
+        
+        return self.w3.eth.send_raw_transaction(
+            signed.rawTransaction
+        ).hex()
